@@ -1,0 +1,57 @@
+% Input data - car data
+
+mass = 250 + 80; %kg
+trackwidth = 1110; %mm
+wheelbase = 1550; %mm
+cgHeight = 300; %mm
+weightDist = 0.5;
+rearRollCenterHeight = 50; %mm
+frontRollCenterHeight = 40; %mm
+
+%Input data - pick up points (x;y;z) x - long, z - up, positive is towards front
+
+%Front - from center of front wheel
+
+%Front upper arm
+
+FrontUpBack = (-131.11; 219.87; 299.21);
+FrontUpFront = (164.73; 339.97; 272.8);
+FrontUpWheel = (0; 504.52; 331);
+
+%Front lower arm
+
+FrontLowBack = (-134.02; 211.15; 136.74);
+FrontLowFront = (128.54; 332.78; 137.6);
+FrontLowWheel = (0; 531.2; 141);
+
+%Front tie rod
+
+FrontTieChassis = (-130; 215; 210);
+FrontTieWheel = (-70; 506.51; 234.13);
+
+%Rear - from center of rear wheel
+
+%Rear upper arm
+
+RearUpBack = (-131.11; 219.87; 299.21);
+RearUpFront = (164.73; 339.97; 272.8);
+RearUpWheel = (0; 504.52; 331);
+
+%Rear lower arm
+
+RearLowBack = (-134.02; 211.15; 136.74);
+RearLowFront = (128.54; 332.78; 137.6);
+RearLowWheel = (0; 531.2; 141);
+
+%Rear tie rod
+
+RearTieChassis = (-130; 215; 210);
+RearTieWheel = (-70; 506.51; 234.13);
+
+
+
+% Input data - known acceleration
+
+ax = 1.5;
+ay = 1.5;
+az = 0;
