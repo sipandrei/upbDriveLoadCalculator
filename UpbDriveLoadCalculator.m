@@ -120,6 +120,144 @@ T_Envelope = table(maxTension, maxCompression, peakAbsForce, peakAbsForce * 2.5,
                    'VariableNames', {'Max_Tractiune_N', 'Max_Compresiune_N', 'Max_Absolut_N', 'Forta_Calcul_SF2_5_N'});
 disp(T_Envelope);
 
+%% ========================================================================
+%  4. MODUL DIMENSIONARE BRAȚE (TRACȚIUNE MAXIMĂ & FLAMBAJ EULER)
+%  ========================================================================
+
+% --- 4.1 Parametri de intrare (Geometrie țeavă, Material & Multiplicator Dinamic) ---
+sizing.Do_mm        = 25.0;     % Diametru exterior tub [mm]
+sizing.t_mm         = 1.5;      % Grosime perete tub [mm]
+sizing.E_GPa        = 64.0;     % Modul de elasticitate longitudinal (Tensile Modulus) [GPa]
+sizing.sigma_ult_t  = 650.0;    % Rezistența la rupere la tracțiune (UTS) [MPa]
+sizing.sigma_ult_c  = 450.0;    % Rezistența la compresiune (UCS) [MPa]
+sizing.k_dyn        = 1.5;      % Multiplicator dinamic (șocuri / vibrații / borduri) [-]
+sizing.K_buckling   = 1.0;      % Factor lungime de flambaj (K = 1.0 pt. articulații sferice / uniball)
+sizing.SF_target    = 2.5;      % Factor de siguranță impus (REQ-SYS-02) [-]
+sizing.insertOffset = 0.045;    % Lungime totală ocupată de capetele uniball/inserturi la ambele capete [m] (0 pt. distanța între hardpoints)
+
+% --- 4.2 Proprietăți geometrice ale secțiunii inelare ---
+Do = sizing.Do_mm * 1e-3;               % [m]
+t  = sizing.t_mm  * 1e-3;               % [m]
+Di = Do - 2 * t;                        % Diametru interior [m]
+
+if Di <= 0
+    error('Eroare geometrie: Grosimea peretelui (2*t) depășește diametrul exterior!');
+end
+
+A_sec  = (pi / 4) * (Do^2 - Di^2);      % Aria secțiunii transversale [m^2]
+I_sec  = (pi / 64) * (Do^4 - Di^4);     % Momentul de inerție axial [m^4]
+E_Pa   = sizing.E_GPa * 1e9;            % Modul Young [Pa]
+UTS_Pa = sizing.sigma_ult_t * 1e6;      % [Pa]
+UCS_Pa = sizing.sigma_ult_c * 1e6;      % [Pa]
+
+% --- 4.3 Extragerea lungimilor reale ale barelor din structura `geom` (în mm -> m) ---
+mirrorY = @(pt) [pt(1); -pt(2); pt(3)];
+
+% Perechile de puncte [Inboard, Outboard] pentru fiecare colț (FL, FR, RL, RR),
+% în exact aceeași ordine cu `baseMembers` (UB, UF, LB, LF, TR, AC):
+pairs_FL = {
+    geom.FrontUpBack,   geom.FrontUpWheel;
+    geom.FrontUpFront,  geom.FrontUpWheel;
+    geom.FrontLowBack,  geom.FrontLowWheel;
+    geom.FrontLowFront, geom.FrontLowWheel;
+    geom.FrontTieChassis, geom.FrontTieWheel;
+    geom.FrontActChassis, geom.FrontActWheel
+};
+
+pairs_FR = {
+    mirrorY(geom.FrontUpBack),   mirrorY(geom.FrontUpWheel);
+    mirrorY(geom.FrontUpFront),  mirrorY(geom.FrontUpWheel);
+    mirrorY(geom.FrontLowBack),  mirrorY(geom.FrontLowWheel);
+    mirrorY(geom.FrontLowFront), mirrorY(geom.FrontLowWheel);
+    mirrorY(geom.FrontTieChassis), mirrorY(geom.FrontTieWheel);
+    mirrorY(geom.FrontActChassis), mirrorY(geom.FrontActWheel)
+};
+
+pairs_RL = {
+    geom.RearUpBack,   geom.RearUpWheel;
+    geom.RearUpFront,  geom.RearUpWheel;
+    geom.RearLowBack,  geom.RearLowWheel;
+    geom.RearLowFront, geom.RearLowWheel;
+    geom.RearTieChassis, geom.RearTieWheel;
+    geom.RearActChassis, geom.RearActWheel
+};
+
+pairs_RR = {
+    mirrorY(geom.RearUpBack),   mirrorY(geom.RearUpWheel);
+    mirrorY(geom.RearUpFront),  mirrorY(geom.RearUpWheel);
+    mirrorY(geom.RearLowBack),  mirrorY(geom.RearLowWheel);
+    mirrorY(geom.RearLowFront), mirrorY(geom.RearLowWheel);
+    mirrorY(geom.RearTieChassis), mirrorY(geom.RearTieWheel);
+    mirrorY(geom.RearActChassis), mirrorY(geom.RearActWheel)
+};
+
+allPairs = [pairs_FL; pairs_FR; pairs_RL; pairs_RR]; % 24 x 2
+
+L_hardpoints_m = zeros(24, 1);
+L_bars         = zeros(24, 1);
+for i = 1:24
+    % Coordonatele din `geom` sunt în mm -> împărțim la 1000 pentru metri
+    L_hardpoints_m(i) = norm(allPairs{i, 2} - allPairs{i, 1}) / 1000;
+    L_bars(i)         = max(0.05, L_hardpoints_m(i) - sizing.insertOffset);
+end
+
+% --- 4.4 Calcul solicitări, forță critică Euler și Factori de Siguranță ---
+F_tens_dyn = sizing.k_dyn * maxTension;          % Forță de calcul la tracțiune [N]
+F_comp_dyn = sizing.k_dyn * abs(maxCompression); % Forță de calcul la compresiune [N]
+
+% Tensiuni axiale [MPa]
+sigma_tens_MPa = (F_tens_dyn / A_sec) * 1e-6;
+sigma_comp_MPa = (F_comp_dyn / A_sec) * 1e-6;
+
+% Forța critică de flambaj Euler [N]
+F_cr_Euler = (pi^2 * E_Pa * I_sec) ./ ((sizing.K_buckling * L_bars).^2);
+
+% Factori de siguranță
+SF_tension  = UTS_Pa ./ (F_tens_dyn / A_sec + eps);
+SF_comp_mat = UCS_Pa ./ (F_comp_dyn / A_sec + eps);
+SF_buckling = F_cr_Euler ./ (F_comp_dyn + eps);
+
+% Factorul de siguranță critic (minimul dintre toate modurile de cedare)
+SF_min = min([SF_tension, SF_comp_mat, SF_buckling], [], 2);
+
+% Determinarea modului critic de cedare pentru fiecare bară
+critMode   = cell(24, 1);
+statusFlag = cell(24, 1);
+for i = 1:24
+    [minVal, modeIdx] = min([SF_tension(i), SF_comp_mat(i), SF_buckling(i)]);
+    if modeIdx == 1
+        critMode{i} = 'Tracțiune';
+    elseif modeIdx == 2
+        critMode{i} = 'Compresiune (Material)';
+    else
+        critMode{i} = 'Flambaj Euler';
+    end
+    
+    if minVal >= sizing.SF_target
+        statusFlag{i} = 'OK';
+    else
+        statusFlag{i} = 'SUB LIMITĂ!';
+    end
+end
+
+% --- 4.5 Afișare Tabel Rezultate Dimensionare ---
+SizingTable = table(memberLabels, round(L_hardpoints_m*1000, 1), round(L_bars*1000, 1), ...
+    round(F_tens_dyn, 1), round(F_comp_dyn, 1), round(F_cr_Euler, 1), ...
+    round(SF_tension, 2),round(SF_comp_mat, 2), round(SF_buckling, 2), round(SF_min, 2), critMode, statusFlag, ...
+    'VariableNames', {'Bara', 'L_hardpoints_mm', 'L_tub_mm', 'Ftens_dyn_N', 'Fcomp_dyn_N', ...
+    'Fcr_Euler_N', 'SF_Tractiune', 'SF_comp_mat', 'SF_Flambaj', 'SF_Minim', 'Mod_Critic', 'Status'});
+
+fprintf('\n====================================================================================================\n');
+fprintf(' DIMENSIONARE STRUCTURALĂ BRAȚE: Tub Ø%.1f x %.1f mm | A = %.3f mm^2 | I = %.3f mm^4 | E = %.1f GPa | k_dyn = %.2f | SF_impus = %.2f\n', ...
+    sizing.Do_mm, sizing.t_mm, A_sec*10^6, I_sec*10^12, sizing.E_GPa, sizing.k_dyn, sizing.SF_target);
+fprintf('====================================================================================================\n');
+disp(SizingTable);
+
+% Identificare cea mai solicitată bară (cel mai mic SF)
+[worstSF, worstIdx] = min(SF_min);
+fprintf('>> BARA CRITICĂ: %s | SF_minim = %.2f (%s) | Lungime tub = %.1f mm\n', ...
+    memberLabels{worstIdx}, worstSF, critMode{worstIdx}, L_bars(worstIdx)*1000);
+
 % =========================================================================
 % FIGURE 1: GRAFICUL 3D CU MAȘINA, BRAȚELE (HEATMAP) ȘI TRIADA ACCELERAȚIILOR ÎN CoG
 % =========================================================================
