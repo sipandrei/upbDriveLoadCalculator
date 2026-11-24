@@ -629,3 +629,6 @@ title('3D Load Case Space (a_x, a_y, a_z)', 'FontWeight', 'bold');
 view(-55, 22); rotate3d on;
 legend('Location', 'northeast', 'FontSize', 8.5);
 hold off;
+
+% TODO - add adhesive shear length sizing
+%       - add bolt sizing calculationS
