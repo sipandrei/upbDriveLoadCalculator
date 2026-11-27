@@ -4,8 +4,8 @@
 clear; clc; close all;
 
 % 1. DATE DE INTRARE VEHICUL (PARAMS)
-params.mass = 250 + 80;              % kg (masă totală cu pilot)
-params.massUnsprung = 16;            % kg (masă nesuspendată)
+params.mass = 255 + 80;              % kg (masă totală cu pilot)
+params.massUnsprung = 33.8;          % kg (masă nesuspendată)
 params.massSprung = params.mass - params.massUnsprung; % kg
 params.trackwidth = 1110;            % mm
 params.g = 9.806;                    % m/s^2
@@ -58,13 +58,14 @@ geom.RearContact   = [-params.wheelbase; params.trackwidth/2; 0];
 % =========================================================================
 ax_range = [-2, -1.5, -1.0, 0.0, 1.0,1.5,2.0, 0.5, -0.5]; % G (negativ = frânare, pozitiv = accelerare)
 ay_range = [0.0, 1.0, 1.5, 2, -2, -1.5, -1, 0.5, -0.5];         % G (viraj dreapta)
-az_range = [0.0, 1.5];                   % G (0 = pistă plană, 1.5 = trecere peste vibrator/bump)
+az_range = [0.0, 1.5, -1.5];                   % G (0 = pistă plană, 1.5 = trecere peste vibrator/bump)
 
 [AX, AY, AZ] = ndgrid(ax_range, ay_range, az_range);
 loadCases = [AX(:), AY(:), AZ(:)];
 
 % Filtrare cazuri nerealiste peste cercul de aderență
 validIdx = sqrt(loadCases(:,1).^2 + loadCases(:,2).^2) <= (params.mu * 1.5);
+disp(loadCases(:,1));
 loadCases = loadCases(validIdx, :);
 numCases = size(loadCases, 1);
 
@@ -133,7 +134,7 @@ sizing.sigma_ult_c  = 450.0;    % Rezistența la compresiune (UCS) [MPa]
 sizing.k_dyn        = 1.5;      % Multiplicator dinamic (șocuri / vibrații / borduri) [-]
 sizing.K_buckling   = 1.0;      % Factor lungime de flambaj (K = 1.0 pt. articulații sferice / uniball)
 sizing.SF_target    = 2.5;      % Factor de siguranță impus (REQ-SYS-02) [-]
-sizing.insertOffset = 0.045;    % Lungime totală ocupată de capetele uniball/inserturi la ambele capete [m] (0 pt. distanța între hardpoints)
+sizing.insertOffset = 0.00;    % Lungime totală ocupată de capetele uniball/inserturi la ambele capete [m] (0 pt. distanța între hardpoints)
 
 % --- 4.2 Proprietăți geometrice ale secțiunii inelare ---
 Do = sizing.Do_mm * 1e-3;               % [m]
@@ -257,6 +258,25 @@ disp(SizingTable);
 [worstSF, worstIdx] = min(SF_min);
 fprintf('>> BARA CRITICĂ: %s | SF_minim = %.2f (%s) | Lungime tub = %.1f mm\n', ...
     memberLabels{worstIdx}, worstSF, critMode{worstIdx}, L_bars(worstIdx)*1000);
+
+%% ========================================================================
+%  5. MODUL DIMENSIONARE  INSERT(TRACȚIUNE MAXIMĂ)
+%  ========================================================================
+sizing.max_strength_adhesive_DP460 = 18; %MPa 18MPa for 3M™ DP460 and 28MPa for 3M™ EC-9323 B/A
+sizing.adjusted_strength_adhesive_DP460 = sizing.max_strength_adhesive_DP460 / sizing.SF_target; % strength divided by fos
+sizing.max_strength_adhesive_9323 = 28; %MPa 18MPa for 3M™ DP460 and 28MPa for 3M™ EC-9323 B/A
+sizing.adjusted_strength_adhesive_9323 = sizing.max_strength_adhesive_9323 / sizing.SF_target; % strength divided by fos
+sizing.layer_thickness = 0.2; %mm
+sizing.insert_diameter = sizing.Do_mm-2*sizing.t_mm-2*sizing.layer_thickness;
+F_tens_dyn_max = max(F_tens_dyn);
+
+L_insert_DP460 = F_tens_dyn_max / (pi*sizing.insert_diameter*sizing.adjusted_strength_adhesive_DP460);
+L_insert_9323 = F_tens_dyn_max / (pi*sizing.insert_diameter*sizing.adjusted_strength_adhesive_9323);
+
+fprintf('>> Lungimea de lipire pentru insert, cu 3M™ DP460: %.2f mm -> rotunjit: %i mm\n', ...
+    L_insert_DP460, ceil(L_insert_DP460));
+fprintf('>> Lungimea de lipire pentru insert, cu 3M™ 9323: %.2f mm -> rotunjit: %i mm\n', ...
+    L_insert_9323, ceil(L_insert_9323));
 
 % =========================================================================
 % FIGURE 1: GRAFICUL 3D CU MAȘINA, BRAȚELE (HEATMAP) ȘI TRIADA ACCELERAȚIILOR ÎN CoG
@@ -632,3 +652,6 @@ hold off;
 
 % TODO - add adhesive shear length sizing
 %       - add bolt sizing calculationS
+
+
+
