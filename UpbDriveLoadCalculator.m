@@ -275,8 +275,20 @@ L_insert_9323 = F_tens_dyn_max / (pi*sizing.insert_diameter*sizing.adjusted_stre
 
 fprintf('>> Lungimea de lipire pentru insert, cu 3M™ DP460: %.2f mm -> rotunjit: %i mm\n', ...
     L_insert_DP460, ceil(L_insert_DP460));
-fprintf('>> Lungimea de lipire pentru insert, cu 3M™ 9323: %.2f mm -> rotunjit: %i mm\n', ...
+fprintf('>> Lungimea de lipire pentru insert, cu 3M™ EC-9323 B/A: %.2f mm -> rotunjit: %i mm\n', ...
     L_insert_9323, ceil(L_insert_9323));
+
+%% ========================================================================
+%  6. MODUL DIMENSIONARE SURUBURI (FORTA MAXIMĂ)
+%  ========================================================================
+F_dyn_max = max([F_tens_dyn;F_comp_dyn]);
+sizing.max_strength_bolt = 1200; %MPa
+sizing.max_shear_bolt = .6*sizing.max_strength_bolt;
+sizing.adjusted_shear_bolt = sizing.max_shear_bolt / sizing.SF_target;
+
+Min_bolt_diameter = sqrt(F_dyn_max * 4 / (2 * pi * sizing.adjusted_shear_bolt));
+fprintf('>> Diametrul minim al surubului este : %.2f mm -> rotunjit: %i mm\n', ...
+    Min_bolt_diameter, ceil(Min_bolt_diameter));
 
 % =========================================================================
 % FIGURE 1: GRAFICUL 3D CU MAȘINA, BRAȚELE (HEATMAP) ȘI TRIADA ACCELERAȚIILOR ÎN CoG
